@@ -263,8 +263,10 @@ def triage_ticket(ticket_text: str) -> dict:
 
     # 1. Determine Category
     if any(k in text_lower for k in [
-        "suspicious login", "foreign ip", "security alert", "unauthorized access",
-        "compromised", "hacked", "data breach", "terminate active sessions"
+        "security breach", "data breach", "breach", "suspicious login", "unauthorized login",
+        "unauthorized access", "unauthorized", "foreign ip", "unknown ip", "russian ip",
+        "security alert", "compromised", "hacked", "malware", "phishing", "firewall",
+        "terminate active sessions", "revoke session", "account takeover"
     ]):
         category = "Security"
 
@@ -306,7 +308,7 @@ def triage_ticket(ticket_text: str) -> dict:
     # 2. Determine Priority (P1 / P2 / P3)
     priority = "P3"
 
-    is_p1_security = (category == "Security" and any(k in text_lower for k in ["unauthorized", "foreign ip", "breach", "compromise", "hacked"]))
+    is_p1_security = (category == "Security")
     is_p1_billing = any(k in text_lower for k in ["charged twice", "unauthorized transaction", "duplicate charge", "fraudulent"])
     is_p1_outage = (
         any(k in text_lower for k in ["500 error", "internal server error", "outage", "system down", "completely down", "service down"])
@@ -571,16 +573,23 @@ if os.path.exists(SAMPLE_PATH):
 # ---------------------------------------------------------
 st.sidebar.subheader(":material/inbox: Ticket Ingestion")
 
-# 1. File Uploader for .txt tickets
+# 1. File Uploader for .txt and .csv tickets
 uploaded_file = st.sidebar.file_uploader(
-    "Upload support tickets (.txt)",
-    type=["txt"],
-    help="Upload a raw text file containing multiple customer tickets"
+    "Upload support tickets (.txt, .csv)",
+    type=["txt", "csv"],
+    help="Upload a raw text file or CSV containing customer tickets"
 )
 
 if uploaded_file is not None:
     try:
-        file_content = uploaded_file.read().decode("utf-8")
+        if uploaded_file.name.lower().endswith(".csv"):
+            df_upload = pd.read_csv(uploaded_file)
+            # Find ticket or text column
+            col_candidates = [c for c in df_upload.columns if any(k in c.lower() for k in ["ticket", "text", "message", "body", "issue", "desc", "subject"])]
+            target_col = col_candidates[0] if col_candidates else df_upload.columns[0]
+            file_content = "\n---\n".join(df_upload[target_col].dropna().astype(str).tolist())
+        else:
+            file_content = uploaded_file.read().decode("utf-8")
         st.session_state["ticket_input"] = file_content
     except Exception as e:
         st.sidebar.error(f"Error reading file: {e}")

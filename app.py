@@ -764,7 +764,6 @@ else:
         "Missing Information",
         "Recommended Team",
         "Duplicate",
-        "Classification",
     ]
     df_display = df_tickets[display_columns]
 
@@ -815,7 +814,6 @@ else:
             "Missing Information": st.column_config.TextColumn("Missing Information", width="medium"),
             "Recommended Team": st.column_config.TextColumn("Recommended Team", width="medium"),
             "Duplicate": st.column_config.TextColumn("Duplicate", width="small"),
-            "Classification": st.column_config.TextColumn("Method", width="small"),
         }
     )
 

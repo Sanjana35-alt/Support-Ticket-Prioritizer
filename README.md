@@ -1,8 +1,8 @@
-# 🎫 Support Ticket Prioritizer
+# Support Ticket Prioritizer
 
 AI-powered customer support ticket triage prototype designed for high-velocity SaaS support teams.
 
-## 🚀 Overview
+## Overview
 
 This application helps support managers and agents quickly triage incoming support tickets by:
 - Classifying incoming tickets into categories
@@ -11,13 +11,13 @@ This application helps support managers and agents quickly triage incoming suppo
 - Routing tickets to recommended teams
 - Flagging potential duplicate tickets
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Python** (Core backend & triage logic)
 - **Streamlit** (Interactive dashboard interface)
 - **Pandas** (Ticket data structuring and reporting)
 
-## 📦 Getting Started
+## Getting Started
 
 ### 1. Install Dependencies
 ```bash

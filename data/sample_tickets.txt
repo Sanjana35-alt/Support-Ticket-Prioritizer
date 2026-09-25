@@ -1,0 +1,49 @@
+TICKET-101
+Subject: Payment deducted twice for annual renewal
+Customer: sarah.jenkins@acmecorp.io
+Message: Hi, our corporate card was charged twice ($1,200 x 2) for the annual enterprise plan renewal this morning. We only authorized one transaction. Please check transaction IDs TXN-89211 and TXN-89212 and refund the duplicate charge immediately.
+---
+TICKET-102
+Subject: Unable to log in - persistent 500 error after 2FA
+Customer: mark.davis@fintechsol.com
+Message: Whenever I enter my 6-digit authenticator code on the login page, the screen turns blank and returns an HTTP 500 Internal Server Error. Three other team members in our Chicago office are facing the exact same issue right now. We cannot access our analytics dashboard.
+---
+TICKET-103
+Subject: Urgent: Account locked after multiple failed attempts
+Customer: priya.patel@globaltech.org
+Message: Hello support, my manager's admin account (admin@globaltech.org) has been locked out after someone attempted to sign in with an incorrect password 5 times. We have an upcoming client presentation and need this account unlocked as soon as possible.
+---
+TICKET-104
+Subject: Hardware security key delivery delayed over two weeks
+Customer: jason.miller@cloudwave.net
+Message: I ordered two FIDO2 hardware security keys (Order #HW-44910) on September 10th with express shipping guaranteed within 3 business days. The tracking status still shows 'Shipment label created, awaiting pickup' in your warehouse. Please provide an updated ETA or re-ship.
+---
+TICKET-105
+Subject: Critical Bug: CSV Export crashes when date filter is applied
+Customer: emily.chen@datastream.co
+Message: We are encountering a bug in the reports module. Exporting table data to CSV works when no date filter is active, but selecting any date range in September triggers an unhandled TypeError: Cannot read properties of undefined (reading 'toISOString'). This is blocking our month-end audit.
+---
+TICKET-106
+Subject: Refund request for accidental seat addition
+Customer: david.kim@nextgenmedia.com
+Message: Yesterday I mistakenly upgraded 10 contractor accounts to full Pro seats while bulk-assigning project permissions. We reverted the roles within 15 minutes, but the pro-rated charge of $350 has already posted to our invoice. Could you please process a refund or credit for this amount?
+---
+TICKET-107
+Subject: Cannot cancel auto-renew on legacy Starter plan
+Customer: lisa.wong@designhub.studio
+Message: I am trying to turn off auto-renewal for our subscription before the October billing cycle, but the 'Manage Billing' page displays an error: 'Subscription ID not found in Stripe customer portal'. Please help me cancel the renewal so we aren't billed next month.
+---
+TICKET-108
+Subject: Security Alert: Suspicious login notification from foreign IP
+Customer: alex.torres@securenet.de
+Message: I just received an automated email stating that my account was accessed from an IP address in Saint Petersburg, Russia. I am based in Frankfurt and did not initiate this login. Please terminate all active sessions, check audit logs for unauthorized exports, and enforce a password reset.
+---
+TICKET-109
+Subject: Password reset link not arriving in inbox
+Customer: rachel.green@coffeeco.com
+Message: I clicked 'Forgot Password' three times over the last hour, but no reset email has arrived. I checked my spam/junk folder and verified with our IT department that no emails from your domain are being quarantined. My username is rachel.green.
+---
+TICKET-110
+Subject: Question regarding SOC2 Type II compliance report
+Customer: tom.baker@enterprisehealth.org
+Message: Hi team, our compliance auditors are requesting a copy of your latest SOC2 Type II audit report along with your current penetration test executive summary for vendor risk assessment. Could you share where these documents can be downloaded under NDA?

@@ -669,39 +669,37 @@ else:
     total_count = p1_count = p2_count = p3_count = dup_count = 0
 
 # ---------------------------------------------------------
-# Main Dashboard: Dynamic Summary Metrics Cards
+# Main Dashboard: Summary Metrics Cards
 # ---------------------------------------------------------
 st.subheader(":material/analytics: Triage Overview")
 
-col1, col2, col3, col4, col5 = st.columns(5)
-
-with col1:
-    st.metric(label="Total Tickets", value=str(total_count))
-with col2:
-    st.metric(
-        label="P1 Critical",
-        value=str(p1_count),
-        delta="Critical" if p1_count > 0 else None,
-        delta_color="inverse",
-    )
-with col3:
-    st.metric(
-        label="P2 High",
-        value=str(p2_count),
-        delta="Attention" if p2_count > 0 else None,
-        delta_color="normal",
-    )
-with col4:
-    st.metric(label="P3 Normal", value=str(p3_count))
-with col5:
-    st.metric(
-        label="Possible Duplicates",
-        value=str(dup_count),
-        delta=f"{dup_count} Flagged" if dup_count > 0 else "0 Detected",
-        delta_color="off",
-    )
-
-st.divider()
+with st.container(border=True):
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric(label="Total Tickets", value=str(total_count))
+    with col2:
+        st.metric(
+            label="P1 Critical",
+            value=str(p1_count),
+            delta="Critical" if p1_count > 0 else None,
+            delta_color="inverse",
+        )
+    with col3:
+        st.metric(
+            label="P2 High",
+            value=str(p2_count),
+            delta="Attention" if p2_count > 0 else None,
+            delta_color="normal",
+        )
+    with col4:
+        st.metric(label="P3 Normal", value=str(p3_count))
+    with col5:
+        st.metric(
+            label="Possible Duplicates",
+            value=str(dup_count),
+            delta=f"{dup_count} Flagged" if dup_count > 0 else "0 Detected",
+            delta_color="off",
+        )
 
 # ---------------------------------------------------------
 # Priority Legend Section
@@ -710,13 +708,15 @@ with st.expander("Priority Classification Guide", icon=":material/info:", expand
     leg_col1, leg_col2, leg_col3 = st.columns(3)
     with leg_col1:
         st.markdown(":material/error: **P1 — Critical**")
-        st.caption("Service outages, security incidents, unauthorized transactions, critical payment failures.")
+        st.caption("Service outages, security alerts, unauthorized transactions, critical payment failures.")
     with leg_col2:
         st.markdown(":material/warning: **P2 — High**")
         st.caption("Feature broken, account locks, repeated payment errors, severe shipment delays.")
     with leg_col3:
         st.markdown(":material/check_circle: **P3 — Normal**")
         st.caption("General queries, minor bugs, refund requests, password resets, doc inquiries.")
+
+st.divider()
 
 # ---------------------------------------------------------
 # Section: Dynamic Ticket Triage Results Table
@@ -733,7 +733,20 @@ with badge_col:
 if df_tickets.empty:
     st.info("No tickets have been triaged yet. Paste tickets or click 'Load Sample Tickets' and press 'Run Triage'.", icon=":material/info:")
 else:
-    # Prepare clean table display columns (hide internal Original Text from table)
+    # ---------------------------------------------------------
+    # Priority Filter Controls (All, P1, P2, P3)
+    # ---------------------------------------------------------
+    filter_col1, filter_col2 = st.columns([3, 1])
+    with filter_col1:
+        selected_priority = st.radio(
+            "Filter by Priority:",
+            options=["All", "P1", "P2", "P3"],
+            horizontal=True,
+            index=0,
+            help="Filter table rows by priority tier",
+        )
+
+    # Filter Dataframe
     display_columns = [
         "Ticket ID",
         "Category",
@@ -746,16 +759,40 @@ else:
     ]
     df_display = df_tickets[display_columns]
 
-    def highlight_priority(val):
+    if selected_priority != "All":
+        df_filtered = df_display[df_display["Priority"].str.startswith(selected_priority)]
+    else:
+        df_filtered = df_display
+
+    with filter_col2:
+        st.caption(f"Showing **{len(df_filtered)}** of **{len(df_display)}** tickets")
+
+    # High-contrast color styling for visual distinguishability
+    def style_priority(val):
         if "P1" in str(val):
-            return "color: #e53935; font-weight: 600;"
+            return "background-color: #ffebee; color: #c62828; font-weight: 700; border-radius: 4px;"
         elif "P2" in str(val):
-            return "color: #f57c00; font-weight: 600;"
+            return "background-color: #fff3e0; color: #ef6c00; font-weight: 700; border-radius: 4px;"
         elif "P3" in str(val):
-            return "color: #2e7d32; font-weight: 600;"
+            return "background-color: #e8f5e9; color: #2e7d32; font-weight: 700; border-radius: 4px;"
         return ""
 
-    styled_df = df_display.style.map(highlight_priority, subset=["Priority"])
+    def style_missing(val):
+        if str(val) != "None":
+            return "color: #d84315; font-weight: 600;"
+        return "color: #757575;"
+
+    def style_duplicate(val):
+        if str(val).startswith("Yes"):
+            return "color: #c62828; font-weight: 700;"
+        return ""
+
+    styled_df = (
+        df_filtered.style
+        .map(style_priority, subset=["Priority"])
+        .map(style_missing, subset=["Missing Information"])
+        .map(style_duplicate, subset=["Duplicate"])
+    )
 
     st.dataframe(
         styled_df,
@@ -768,60 +805,72 @@ else:
             "Customer Issue": st.column_config.TextColumn("Customer Issue", width="large"),
             "Missing Information": st.column_config.TextColumn("Missing Information", width="medium"),
             "Recommended Team": st.column_config.TextColumn("Recommended Team", width="medium"),
-            "Duplicate": st.column_config.TextColumn("Duplicate", width="medium"),
+            "Duplicate": st.column_config.TextColumn("Duplicate", width="small"),
             "Classification": st.column_config.TextColumn("Method", width="small"),
         }
     )
 
 # ---------------------------------------------------------
-# Feature 2: Ticket Details Inspector
+# Feature 2: Clean Ticket Details Inspector
 # ---------------------------------------------------------
 if results:
     st.divider()
     st.subheader(":material/search: Ticket Details Inspector")
 
     ticket_options = [
-        f"{r['Ticket ID']} — {r['Category']} | {r['Customer Issue'][:55]}"
+        f"{r['Ticket ID']} — {r['Priority']} | {r['Category']} | {r['Customer Issue'][:50]}"
         for r in results
     ]
 
     selected_index = st.selectbox(
-        "Select a ticket to inspect full details:",
+        "Select a ticket to inspect:",
         options=list(range(len(ticket_options))),
         format_func=lambda idx: ticket_options[idx],
         key="selected_ticket_idx",
-        help="Choose any ticket from the triage queue to inspect original text and missing information."
+        help="Select any ticket to view original text and missing information status.",
     )
 
     selected = results[selected_index]
 
     with st.container(border=True):
-        det_col1, det_col2 = st.columns([1, 1])
+        top_c1, top_c2, top_c3, top_c4 = st.columns(4)
 
-        with det_col1:
+        with top_c1:
             st.markdown(f"**Ticket ID:** `{selected['Ticket ID']}`")
-            st.markdown(f"**Category:** {selected['Category']}")
             st.markdown(f"**Priority:** {selected['Priority']}")
-            st.markdown(f"**Recommended Team:** {selected['Recommended Team']}")
 
-            # Duplicate Status Display
+        with top_c2:
+            st.markdown(f"**Category:** {selected['Category']}")
+            st.markdown(f"**Assigned Team:** {selected['Recommended Team']}")
+
+        with top_c3:
+            st.markdown(f"**Classification:** {selected['Classification']}")
             if selected["Duplicate"].startswith("Yes"):
-                st.warning(f"⚠️ **Duplicate Status:** Possible duplicate of `{selected['Similar Ticket']}`", icon=":material/warning:")
+                st.markdown(f"**Duplicate:** :red[**{selected['Duplicate']}**]")
             else:
-                st.info("✓ **Duplicate Status:** Unique ticket (no duplicates detected)", icon=":material/check:")
+                st.markdown("**Duplicate:** No")
 
-        with det_col2:
-            st.markdown(f"**Customer Issue:**\n> {selected['Customer Issue']}")
-
-            # Visually Noticeable Missing Information
+        with top_c4:
             missing_val = selected["Missing Information"]
             if missing_val and missing_val != "None":
-                st.warning(f"⚠️ **Missing Information:** {missing_val} required")
+                st.markdown(f"**Status:** :orange[**Incomplete Info**]")
             else:
-                st.success("✓ **Information Complete**")
+                st.markdown("**Status:** :green[**Complete Info**]")
 
+        st.markdown("---")
+
+        # Noticeable Missing Information Callout
+        if missing_val and missing_val != "None":
+            st.warning(f"⚠️ **Missing Information:** {missing_val} is required.", icon=":material/warning:")
+        else:
+            st.success("✓ **Information Complete** — All required details are provided.", icon=":material/check_circle:")
+
+        # Customer Issue
+        st.markdown(f"**Customer Issue Summary:**\n> {selected['Customer Issue']}")
+
+        # Original Ticket Content
         st.markdown("**Original Ticket Text:**")
         st.code(selected.get("Original Text", ""), language=None)
 
-# Subtle footer
-st.markdown("<br><center><small style='color: gray;'>Support Ticket Prioritizer Prototype • Complete Prototype</small></center>", unsafe_allow_html=True)
+# Subtle hackathon footer
+st.markdown("<br><center><small style='color: gray;'>Support Ticket Prioritizer • Hackathon Prototype</small></center>", unsafe_allow_html=True)

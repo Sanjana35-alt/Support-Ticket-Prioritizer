@@ -743,29 +743,19 @@ else:
     with filter_col2:
         st.caption(f"Showing **{len(df_filtered)}** of **{len(df_display)}** tickets")
 
-    # High-contrast color styling for visual distinguishability
-    def style_priority(val):
-        if "P1" in str(val):
-            return "background-color: #ffebee; color: #c62828; font-weight: 700; border-radius: 4px;"
-        elif "P2" in str(val):
-            return "background-color: #fff3e0; color: #ef6c00; font-weight: 700; border-radius: 4px;"
-        elif "P3" in str(val):
-            return "background-color: #e8f5e9; color: #2e7d32; font-weight: 700; border-radius: 4px;"
-        return ""
-
+    # Styling for missing information and duplicates (no background highlight on Priority)
     def style_missing(val):
         if str(val) != "None":
-            return "color: #d84315; font-weight: 700;"
-        return "color: #757575;"
+            return "color: #ff7043; font-weight: 600;"
+        return "color: #9e9e9e;"
 
     def style_duplicate(val):
         if str(val).startswith("Yes"):
-            return "color: #c62828; font-weight: 700;"
+            return "color: #ef5350; font-weight: 600;"
         return ""
 
     styled_df = (
         df_filtered.style
-        .map(style_priority, subset=["Priority"])
         .map(style_missing, subset=["Missing Information"])
         .map(style_duplicate, subset=["Duplicate"])
     )
@@ -776,7 +766,7 @@ else:
         hide_index=True,
         column_config={
             "Ticket ID": st.column_config.TextColumn("Ticket ID", width="small"),
-            "Category": st.column_config.TextColumn("Category", width="medium"),
+            "Category": st.column_config.TextColumn("Category", width="small"),
             "Priority": st.column_config.TextColumn("Priority", width="small"),
             "Customer Issue": st.column_config.TextColumn("Customer Issue", width="large"),
             "Missing Information": st.column_config.TextColumn("Missing Information", width="medium"),

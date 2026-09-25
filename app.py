@@ -1,11 +1,12 @@
 """
-Support Ticket Prioritizer - Functional Prototype with Gemini AI Classification
-Hybrid triage engine: Gemini AI with seamless local rule-based fallback.
+Support Ticket Prioritizer - Complete Functional Prototype
+AI Classification (Gemini), Local Rule Fallback, Duplicate Detection, and Ticket Details Inspector.
 """
 
 import json
 import os
 import re
+from difflib import SequenceMatcher
 import streamlit as st
 import pandas as pd
 
@@ -190,6 +191,67 @@ def detect_missing_information(category: str, ticket_text: str) -> str:
 
 
 # ---------------------------------------------------------
+# Feature 1: Lightweight Duplicate Detection
+# ---------------------------------------------------------
+def get_tokens(text: str) -> set[str]:
+    """Extracts non-trivial word tokens for similarity comparison."""
+    stopwords = {
+        "the", "and", "for", "with", "this", "that", "our", "your", "from",
+        "have", "has", "been", "was", "are", "not", "please", "can", "hello",
+        "dear", "team", "support", "ticket", "customer", "subject", "message"
+    }
+    words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
+    return {w for w in words if w not in stopwords}
+
+
+def check_duplicate(current_issue: str, current_text: str, current_cat: str, past_tickets: list[dict]) -> tuple[bool, str | None]:
+    """
+    Compares current ticket against previously triaged tickets using token overlap and SequenceMatcher.
+    Returns (is_duplicate, similar_ticket_id).
+    """
+    curr_issue_tokens = get_tokens(current_issue)
+    curr_text_tokens = get_tokens(current_text)
+
+    best_match_id = None
+    max_sim = 0.0
+
+    for past in past_tickets:
+        past_id = past["Ticket ID"]
+        past_issue = past["Customer Issue"]
+        past_text = past.get("Original Text", "")
+        past_cat = past["Category"]
+
+        past_issue_tokens = get_tokens(past_issue)
+        past_text_tokens = get_tokens(past_text)
+
+        # Jaccard + Sequence similarity on customer issue
+        jaccard_issue = len(curr_issue_tokens & past_issue_tokens) / len(curr_issue_tokens | past_issue_tokens) if (curr_issue_tokens and past_issue_tokens) else 0.0
+        seq_issue = SequenceMatcher(None, current_issue.lower(), past_issue.lower()).ratio()
+        issue_sim = max(jaccard_issue, seq_issue)
+
+        # Jaccard + Sequence similarity on full text
+        jaccard_text = len(curr_text_tokens & past_text_tokens) / len(curr_text_tokens | past_text_tokens) if (curr_text_tokens and past_text_tokens) else 0.0
+        seq_text = SequenceMatcher(None, current_text.lower(), past_text.lower()).ratio()
+        text_sim = max(jaccard_text, seq_text)
+
+        combined_sim = max(issue_sim, text_sim * 0.85)
+
+        # Category alignment boost
+        if current_cat == past_cat:
+            combined_sim += 0.08
+
+        if combined_sim > max_sim:
+            max_sim = combined_sim
+            best_match_id = past_id
+
+    # Similarity threshold to declare a duplicate
+    if max_sim >= 0.48:
+        return True, best_match_id
+
+    return False, None
+
+
+# ---------------------------------------------------------
 # Core Local Triage Function (Rule-Based Fallback)
 # ---------------------------------------------------------
 def triage_ticket(ticket_text: str) -> dict:
@@ -300,7 +362,6 @@ def validate_ai_response(response_text: str) -> dict | None:
         return None
     try:
         clean_str = response_text.strip()
-        # Strip potential markdown fences
         if clean_str.startswith("```"):
             clean_str = re.sub(r"^```(?:json)?\s*", "", clean_str)
             clean_str = re.sub(r"\s*```$", "", clean_str)
@@ -317,7 +378,6 @@ def validate_ai_response(response_text: str) -> dict | None:
         customer_issue = str(data["customer_issue"]).strip()
         missing_information = str(data["missing_information"]).strip()
 
-        # Strict validation against allowed lists
         if category not in ALLOWED_CATEGORIES:
             return None
         if priority not in ALLOWED_PRIORITIES:
@@ -395,20 +455,18 @@ def ai_triage_ticket(ticket_text: str, api_key: str | None = None) -> dict | Non
             if validated:
                 return validated
     except Exception:
-        # Fallback to local rule-based classifier
         return None
 
     return None
 
 
 # ---------------------------------------------------------
-# Batch Triage Orchestrator (AI with Local Fallback)
+# Batch Triage Orchestrator (with Duplicate Detection)
 # ---------------------------------------------------------
 def run_batch_triage(raw_text: str, api_key: str | None = None) -> tuple[list[dict], str]:
     """
     Parses tickets and runs triage on each.
-    Uses Gemini AI if key exists and succeeds; otherwise falls back to local rules.
-    Guarantees Gemini is called at most once per ticket per run.
+    Performs duplicate detection against preceding tickets in the batch.
     """
     tickets = parse_tickets(raw_text)
     results = []
@@ -437,6 +495,16 @@ def run_batch_triage(raw_text: str, api_key: str | None = None) -> tuple[list[di
         priority_code = triage_data["priority"]
         priority_label = f"{priority_code} - {PRIORITY_NAMES.get(priority_code, 'Normal')}"
 
+        # Duplicate Detection against previously processed tickets
+        is_dup, similar_id = check_duplicate(
+            current_issue=triage_data["customer_issue"],
+            current_text=t,
+            current_cat=triage_data["category"],
+            past_tickets=results,
+        )
+
+        duplicate_status = f"Yes ({similar_id})" if (is_dup and similar_id) else "No"
+
         results.append({
             "Ticket ID": ticket_id,
             "Category": triage_data["category"],
@@ -444,11 +512,13 @@ def run_batch_triage(raw_text: str, api_key: str | None = None) -> tuple[list[di
             "Customer Issue": triage_data["customer_issue"],
             "Missing Information": triage_data["missing_information"],
             "Recommended Team": triage_data["recommended_team"],
-            "Duplicate": "No",
+            "Duplicate": duplicate_status,
+            "Similar Ticket": similar_id if is_dup else "None",
             "Classification": "🤖 AI" if source_label == "AI Classification" else "⚙️ Local",
+            "Original Text": t,
         })
 
-    # Determine overall classification mode summary
+    # Mode summary
     if ai_count > 0:
         mode = "🤖 AI Classification" if ai_count == len(tickets) else f"Hybrid ({ai_count} AI / {len(tickets) - ai_count} Local)"
     else:
@@ -542,7 +612,6 @@ if secret_key:
     st.sidebar.caption("🟢 `GEMINI_API_KEY` detected from secrets")
     active_api_key = secret_key
 else:
-    # Optional manual key input for quick testing if secrets.toml isn't configured yet
     manual_key = st.sidebar.text_input(
         "Gemini API Key (optional):",
         type="password",
@@ -594,7 +663,8 @@ if not df_tickets.empty:
     p1_count = int(df_tickets["Priority"].str.startswith("P1").sum())
     p2_count = int(df_tickets["Priority"].str.startswith("P2").sum())
     p3_count = int(df_tickets["Priority"].str.startswith("P3").sum())
-    dup_count = 0  # Duplicate detection is deferred to Step 4
+    # Dynamic duplicate count
+    dup_count = int(df_tickets["Duplicate"].str.startswith("Yes").sum())
 else:
     total_count = p1_count = p2_count = p3_count = dup_count = 0
 
@@ -624,7 +694,12 @@ with col3:
 with col4:
     st.metric(label="P3 Normal", value=str(p3_count))
 with col5:
-    st.metric(label="Possible Duplicates", value=str(dup_count), delta="0 Detected", delta_color="off")
+    st.metric(
+        label="Possible Duplicates",
+        value=str(dup_count),
+        delta=f"{dup_count} Flagged" if dup_count > 0 else "0 Detected",
+        delta_color="off",
+    )
 
 st.divider()
 
@@ -650,7 +725,6 @@ title_col, badge_col = st.columns([3, 1])
 with title_col:
     st.subheader(":material/table_chart: Ticket Triage Results")
 with badge_col:
-    # Subtle mode indicator
     if "AI" in classification_mode:
         st.caption("Mode: **🤖 AI Classification**")
     else:
@@ -659,7 +733,19 @@ with badge_col:
 if df_tickets.empty:
     st.info("No tickets have been triaged yet. Paste tickets or click 'Load Sample Tickets' and press 'Run Triage'.", icon=":material/info:")
 else:
-    # Color priority column for immediate visual distinction
+    # Prepare clean table display columns (hide internal Original Text from table)
+    display_columns = [
+        "Ticket ID",
+        "Category",
+        "Priority",
+        "Customer Issue",
+        "Missing Information",
+        "Recommended Team",
+        "Duplicate",
+        "Classification",
+    ]
+    df_display = df_tickets[display_columns]
+
     def highlight_priority(val):
         if "P1" in str(val):
             return "color: #e53935; font-weight: 600;"
@@ -669,7 +755,7 @@ else:
             return "color: #2e7d32; font-weight: 600;"
         return ""
 
-    styled_df = df_tickets.style.map(highlight_priority, subset=["Priority"])
+    styled_df = df_display.style.map(highlight_priority, subset=["Priority"])
 
     st.dataframe(
         styled_df,
@@ -682,10 +768,60 @@ else:
             "Customer Issue": st.column_config.TextColumn("Customer Issue", width="large"),
             "Missing Information": st.column_config.TextColumn("Missing Information", width="medium"),
             "Recommended Team": st.column_config.TextColumn("Recommended Team", width="medium"),
-            "Duplicate": st.column_config.TextColumn("Duplicate", width="small"),
+            "Duplicate": st.column_config.TextColumn("Duplicate", width="medium"),
             "Classification": st.column_config.TextColumn("Method", width="small"),
         }
     )
 
+# ---------------------------------------------------------
+# Feature 2: Ticket Details Inspector
+# ---------------------------------------------------------
+if results:
+    st.divider()
+    st.subheader(":material/search: Ticket Details Inspector")
+
+    ticket_options = [
+        f"{r['Ticket ID']} — {r['Category']} | {r['Customer Issue'][:55]}"
+        for r in results
+    ]
+
+    selected_index = st.selectbox(
+        "Select a ticket to inspect full details:",
+        options=list(range(len(ticket_options))),
+        format_func=lambda idx: ticket_options[idx],
+        key="selected_ticket_idx",
+        help="Choose any ticket from the triage queue to inspect original text and missing information."
+    )
+
+    selected = results[selected_index]
+
+    with st.container(border=True):
+        det_col1, det_col2 = st.columns([1, 1])
+
+        with det_col1:
+            st.markdown(f"**Ticket ID:** `{selected['Ticket ID']}`")
+            st.markdown(f"**Category:** {selected['Category']}")
+            st.markdown(f"**Priority:** {selected['Priority']}")
+            st.markdown(f"**Recommended Team:** {selected['Recommended Team']}")
+
+            # Duplicate Status Display
+            if selected["Duplicate"].startswith("Yes"):
+                st.warning(f"⚠️ **Duplicate Status:** Possible duplicate of `{selected['Similar Ticket']}`", icon=":material/warning:")
+            else:
+                st.info("✓ **Duplicate Status:** Unique ticket (no duplicates detected)", icon=":material/check:")
+
+        with det_col2:
+            st.markdown(f"**Customer Issue:**\n> {selected['Customer Issue']}")
+
+            # Visually Noticeable Missing Information
+            missing_val = selected["Missing Information"]
+            if missing_val and missing_val != "None":
+                st.warning(f"⚠️ **Missing Information:** {missing_val} required")
+            else:
+                st.success("✓ **Information Complete**")
+
+        st.markdown("**Original Ticket Text:**")
+        st.code(selected.get("Original Text", ""), language=None)
+
 # Subtle footer
-st.markdown("<br><center><small style='color: gray;'>Support Ticket Prioritizer Prototype • Step 3 (AI + Fallback)</small></center>", unsafe_allow_html=True)
+st.markdown("<br><center><small style='color: gray;'>Support Ticket Prioritizer Prototype • Complete Prototype</small></center>", unsafe_allow_html=True)

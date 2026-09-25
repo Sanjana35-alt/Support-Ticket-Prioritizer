@@ -99,6 +99,21 @@ def parse_tickets(raw_text: str) -> list[str]:
     return [cleaned]
 
 
+def extract_ticket_id(ticket_text: str, fallback_idx: int) -> str:
+    """
+    Extracts explicit ticket ID from text (e.g. 'TICKET-108', 'TKT-005', 'Ticket #12').
+    If not found, returns fallback format 'TKT-xxx'.
+    """
+    match = re.search(r"(?:^|\n)\s*(?:[-*#\s]*)(TICKET|TKT|Ticket)\s*[-#:]?\s*([A-Za-z0-9_-]+)", ticket_text, flags=re.IGNORECASE)
+    if match:
+        pfx = match.group(1).upper()
+        num = match.group(2).strip()
+        if pfx in ("TICKET", "TKT"):
+            return f"{pfx}-{num}"
+        return f"TKT-{num}"
+    return f"TKT-{fallback_idx:03d}"
+
+
 def extract_customer_issue(ticket_text: str) -> str:
     """
     Extracts a concise summary of the customer's actual problem.
@@ -494,7 +509,7 @@ def run_batch_triage(raw_text: str, api_key: str | None = None) -> tuple[list[di
             triage_data = triage_ticket(t)
             source_label = "Local Fallback"
 
-        ticket_id = f"TKT-{idx:03d}"
+        ticket_id = extract_ticket_id(t, idx)
         priority_code = triage_data["priority"]
         priority_label = f"{priority_code} - {PRIORITY_NAMES.get(priority_code, 'Normal')}"
 

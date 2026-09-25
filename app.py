@@ -3,6 +3,7 @@ Support Ticket Prioritizer - Complete Functional Prototype
 AI Classification (Gemini), Local Rule Fallback, Duplicate Detection, and Ticket Details Inspector.
 """
 
+import html
 import json
 import os
 import re
@@ -516,15 +517,15 @@ def run_batch_triage(raw_text: str, api_key: str | None = None) -> tuple[list[di
             "Recommended Team": triage_data["recommended_team"],
             "Duplicate": duplicate_status,
             "Similar Ticket": similar_id if is_dup else "None",
-            "Classification": "🤖 AI" if source_label == "AI Classification" else "⚙️ Local",
+            "Classification": "AI" if source_label == "AI Classification" else "Local",
             "Original Text": t,
         })
 
     # Mode summary
     if ai_count > 0:
-        mode = "🤖 AI Classification" if ai_count == len(tickets) else f"Hybrid ({ai_count} AI / {len(tickets) - ai_count} Local)"
+        mode = "AI Classification" if ai_count == len(tickets) else f"Hybrid ({ai_count} AI / {len(tickets) - ai_count} Local)"
     else:
-        mode = "⚙️ Local Fallback"
+        mode = "Local Fallback"
 
     return results, mode
 
@@ -555,8 +556,8 @@ def get_gemini_api_key() -> str | None:
 # ---------------------------------------------------------
 # Header & Subtitle
 # ---------------------------------------------------------
-st.title(":material/support_agent: Support Ticket Prioritizer")
-st.caption("AI-powered customer support ticket triage")
+st.title("🎫 Support Ticket Prioritizer")
+st.caption("Intelligent customer support ticket prioritization")
 st.divider()
 
 # ---------------------------------------------------------
@@ -569,22 +570,21 @@ if os.path.exists(SAMPLE_PATH):
         default_sample_text = f.read()
 
 # ---------------------------------------------------------
-# Sidebar: Ticket Input & Gemini Configuration
+# Sidebar: Ticket Input & Controls
 # ---------------------------------------------------------
-st.sidebar.subheader(":material/inbox: Ticket Ingestion")
+st.sidebar.subheader(":material/inbox: Ticket Intake")
 
 # 1. File Uploader for .txt and .csv tickets
 uploaded_file = st.sidebar.file_uploader(
     "Upload support tickets (.txt, .csv)",
     type=["txt", "csv"],
-    help="Upload a raw text file or CSV containing customer tickets"
+    help="Upload a text file or CSV containing customer tickets"
 )
 
 if uploaded_file is not None:
     try:
         if uploaded_file.name.lower().endswith(".csv"):
             df_upload = pd.read_csv(uploaded_file)
-            # Find ticket or text column
             col_candidates = [c for c in df_upload.columns if any(k in c.lower() for k in ["ticket", "text", "message", "body", "issue", "desc", "subject"])]
             target_col = col_candidates[0] if col_candidates else df_upload.columns[0]
             file_content = "\n---\n".join(df_upload[target_col].dropna().astype(str).tolist())
@@ -610,31 +610,7 @@ pasted_tickets = st.sidebar.text_area(
     placeholder="Paste ticket subjects and bodies here (separated by '---' or newlines)..."
 )
 
-# 3. Gemini API Key Configuration Section
-st.sidebar.divider()
-st.sidebar.subheader(":material/key: Gemini AI Configuration")
-
-secret_key = get_gemini_api_key()
-active_api_key = None
-
-if secret_key:
-    st.sidebar.caption("🟢 `GEMINI_API_KEY` detected from secrets")
-    active_api_key = secret_key
-else:
-    manual_key = st.sidebar.text_input(
-        "Gemini API Key (optional):",
-        type="password",
-        placeholder="Paste API key or leave blank for local",
-        help="Paste a Gemini API key or add GEMINI_API_KEY to .streamlit/secrets.toml. If empty, local rule-based classifier is used automatically."
-    )
-    if manual_key.strip():
-        active_api_key = manual_key.strip()
-        st.sidebar.caption("🔑 Using manually entered Gemini API key")
-    else:
-        st.sidebar.caption("⚪ No key found — running in **Local Fallback** mode")
-
-# 4. Action Button: Run Triage
-st.sidebar.divider()
+# 3. Action Button: Run Triage (Prominent primary button)
 run_triage_clicked = st.sidebar.button("Run Triage", icon=":material/bolt:", type="primary", use_container_width=True)
 
 # ---------------------------------------------------------
@@ -646,25 +622,25 @@ if run_triage_clicked:
         st.sidebar.warning("No ticket content found. Please paste tickets or load samples.", icon=":material/warning:")
     else:
         with st.spinner("Triaging tickets..."):
-            results_data, mode_str = run_batch_triage(active_text, api_key=active_api_key)
+            results_data, mode_str = run_batch_triage(active_text)
             st.session_state["triage_results"] = results_data
             st.session_state["classification_mode"] = mode_str
-            st.sidebar.success(f"Triaged {len(results_data)} tickets ({mode_str})", icon=":material/check_circle:")
+            st.sidebar.success(f"Triaged {len(results_data)} tickets", icon=":material/check_circle:")
 
 # Initial run if no results yet exist in session
 if "triage_results" not in st.session_state:
     initial_text = st.session_state.get("ticket_input", default_sample_text).strip()
     if initial_text:
-        results_data, mode_str = run_batch_triage(initial_text, api_key=active_api_key)
+        results_data, mode_str = run_batch_triage(initial_text)
         st.session_state["triage_results"] = results_data
         st.session_state["classification_mode"] = mode_str
     else:
         st.session_state["triage_results"] = []
-        st.session_state["classification_mode"] = "⚙️ Local Fallback"
+        st.session_state["classification_mode"] = "Local Fallback"
 
 # Prepare Dataframe & Dynamic Metrics
 results = st.session_state.get("triage_results", [])
-classification_mode = st.session_state.get("classification_mode", "⚙️ Local Fallback")
+classification_mode = st.session_state.get("classification_mode", "Local Fallback")
 df_tickets = pd.DataFrame(results)
 
 if not df_tickets.empty:
@@ -672,7 +648,6 @@ if not df_tickets.empty:
     p1_count = int(df_tickets["Priority"].str.startswith("P1").sum())
     p2_count = int(df_tickets["Priority"].str.startswith("P2").sum())
     p3_count = int(df_tickets["Priority"].str.startswith("P3").sum())
-    # Dynamic duplicate count
     dup_count = int(df_tickets["Duplicate"].str.startswith("Yes").sum())
 else:
     total_count = p1_count = p2_count = p3_count = dup_count = 0
@@ -680,7 +655,7 @@ else:
 # ---------------------------------------------------------
 # Main Dashboard: Summary Metrics Cards
 # ---------------------------------------------------------
-st.subheader(":material/analytics: Triage Overview")
+st.subheader("📋 Support Ticket Overview")
 
 with st.container(border=True):
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -713,7 +688,7 @@ with st.container(border=True):
 # ---------------------------------------------------------
 # Priority Legend Section
 # ---------------------------------------------------------
-with st.expander("Priority Classification Guide", icon=":material/info:", expanded=False):
+with st.expander(":material/info: Priority Classification Guide", expanded=False):
     leg_col1, leg_col2, leg_col3 = st.columns(3)
     with leg_col1:
         st.markdown(":material/error: **P1 — Critical**")
@@ -730,14 +705,7 @@ st.divider()
 # ---------------------------------------------------------
 # Section: Dynamic Ticket Triage Results Table
 # ---------------------------------------------------------
-title_col, badge_col = st.columns([3, 1])
-with title_col:
-    st.subheader(":material/table_chart: Ticket Triage Results")
-with badge_col:
-    if "AI" in classification_mode:
-        st.caption("Mode: **🤖 AI Classification**")
-    else:
-        st.caption("Mode: **⚙️ Local Fallback**")
+st.subheader("📋 Support Ticket Results")
 
 if df_tickets.empty:
     st.info("No tickets have been triaged yet. Paste tickets or click 'Load Sample Tickets' and press 'Run Triage'.", icon=":material/info:")
@@ -787,7 +755,7 @@ else:
 
     def style_missing(val):
         if str(val) != "None":
-            return "color: #d84315; font-weight: 600;"
+            return "color: #d84315; font-weight: 700;"
         return "color: #757575;"
 
     def style_duplicate(val):
@@ -822,7 +790,7 @@ else:
 # ---------------------------------------------------------
 if results:
     st.divider()
-    st.subheader(":material/search: Ticket Details Inspector")
+    st.subheader(":material/search: Ticket Details")
 
     ticket_options = [
         f"{r['Ticket ID']} — {r['Priority']} | {r['Category']} | {r['Customer Issue'][:50]}"
@@ -834,7 +802,7 @@ if results:
         options=list(range(len(ticket_options))),
         format_func=lambda idx: ticket_options[idx],
         key="selected_ticket_idx",
-        help="Select any ticket to view original text and missing information status.",
+        help="Select any ticket to view original customer message and missing information status.",
     )
 
     selected = results[selected_index]
@@ -851,33 +819,38 @@ if results:
             st.markdown(f"**Assigned Team:** {selected['Recommended Team']}")
 
         with top_c3:
-            st.markdown(f"**Classification:** {selected['Classification']}")
             if selected["Duplicate"].startswith("Yes"):
                 st.markdown(f"**Duplicate:** :red[**{selected['Duplicate']}**]")
             else:
-                st.markdown("**Duplicate:** No")
+                st.markdown("**Duplicate:** :material/check_circle: None (Unique)")
 
         with top_c4:
             missing_val = selected["Missing Information"]
             if missing_val and missing_val != "None":
-                st.markdown(f"**Status:** :orange[**Incomplete Info**]")
+                st.markdown(f"**Information:** :orange[**:material/warning: Incomplete**]")
             else:
-                st.markdown("**Status:** :green[**Complete Info**]")
+                st.markdown("**Information:** :green[**:material/check_circle: Complete**]")
 
         st.markdown("---")
 
         # Noticeable Missing Information Callout
         if missing_val and missing_val != "None":
-            st.warning(f"⚠️ **Missing Information:** {missing_val} is required.", icon=":material/warning:")
+            st.warning(f":material/warning: **Missing Information:** {missing_val} is required.", icon=":material/warning:")
         else:
-            st.success("✓ **Information Complete** — All required details are provided.", icon=":material/check_circle:")
+            st.success(":material/check_circle: **Information Complete** — All required details are provided.", icon=":material/check_circle:")
 
-        # Customer Issue
+        # Customer Issue Summary
         st.markdown(f"**Customer Issue Summary:**\n> {selected['Customer Issue']}")
 
-        # Original Ticket Content
-        st.markdown("**Original Ticket Text:**")
-        st.code(selected.get("Original Text", ""), language=None)
+        # Original Customer Message
+        st.markdown("**Original Customer Message:**")
+        msg_text = selected.get("Original Text", "").strip()
+        escaped_msg = html.escape(msg_text)
+        st.markdown(
+            f"""<div style="padding: 12px 16px; border-radius: 6px; border: 1px solid rgba(128, 128, 128, 0.25); background: rgba(128, 128, 128, 0.08); line-height: 1.6; word-break: break-word; white-space: pre-wrap; font-family: inherit;">{escaped_msg}</div>""",
+            unsafe_allow_html=True,
+        )
 
 # Subtle hackathon footer
 st.markdown("<br><center><small style='color: gray;'>Support Ticket Prioritizer • Hackathon Prototype</small></center>", unsafe_allow_html=True)
+
